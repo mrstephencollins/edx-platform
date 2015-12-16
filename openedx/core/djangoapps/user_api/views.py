@@ -617,7 +617,7 @@ class RegistrationView(APIView):
             terms_text = _(u"Terms of Service and Honor Code")
 
         terms_link = u"<a href=\"{url}\">{terms_text}</a>".format(
-            url=marketing_link("HONOR"),
+            url=settings.MKTG_URLS.get('TOS'), #marketing_link("HONOR"),
             terms_text=terms_text
         )
 
