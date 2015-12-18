@@ -65,3 +65,4 @@ git+https://github.com/edx/edx-proctoring.git@0.9.16#egg=edx-proctoring==0.9.16
 -e git+https://github.com/openfun/edx-gea.git#egg=edx-gea
 -e git+https://github.com/openfun/password-container-xblock.git#egg=password-container-xblock
 -e git+https://github.com/openfun/xblock-utils2.git#egg=xblock_utils2
+-e git+git@github.com:mrstephencollins/edx_xblock_reset_library_content.git@457ca2e3213af2a9da10639d3273698f3b2700f9#egg=reset_library_content_xblock-master
