@@ -347,7 +347,7 @@ if settings.COURSEWARE_ENABLED:
 
         #Inside the course
         url(r'^courses/{}/$'.format(settings.COURSE_ID_PATTERN),
-            'courseware.views.course_info', name="course_root"),
+            'courseware.views.static_tab', name="course_root"),
         url(r'^courses/{}/info$'.format(settings.COURSE_ID_PATTERN),
             'courseware.views.course_info', name="info"),
         # TODO arjun remove when custom tabs in place, see courseware/courses.py

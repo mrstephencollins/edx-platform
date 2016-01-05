@@ -2680,3 +2680,5 @@ PROCTORING_BACKEND_PROVIDER = {
     'options': {},
 }
 PROCTORING_SETTINGS = {}
+
+COURSE_START_PAGE_NAME = 'SBx Student Dashboard'

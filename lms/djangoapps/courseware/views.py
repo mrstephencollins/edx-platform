@@ -20,6 +20,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
 from certificates import api as certs_api
+from courseware.tabs import get_course_tab_list
 from edxmako.shortcuts import render_to_response, render_to_string, marketing_link
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.cache import cache_control
@@ -739,7 +740,7 @@ def course_info(request, course_id):
 
 @ensure_csrf_cookie
 @ensure_valid_course_key
-def static_tab(request, course_id, tab_slug):
+def static_tab(request, course_id, tab_slug=None):
     """
     Display the courses tab with the given name.
 
@@ -749,6 +750,14 @@ def static_tab(request, course_id, tab_slug):
     course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
 
     course = get_course_with_access(request.user, 'load', course_key)
+
+    if tab_slug is None:
+        tab_list = get_course_tab_list(request, course)
+        sbx_tab = filter(lambda tab: tab.name == settings.COURSE_START_PAGE_NAME, tab_list)
+        if sbx_tab:
+            tab_slug = sbx_tab[0].url_slug
+        else:
+            return course_info(request, course_id)
 
     tab = CourseTabList.get_tab_by_slug(course.tabs, tab_slug)
     if tab is None:
