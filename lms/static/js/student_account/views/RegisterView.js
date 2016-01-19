@@ -70,8 +70,12 @@
                 }
             },
 
-            saveSuccess: function() {
-                this.trigger('auth-complete');
+            saveSuccess: function(data) {
+                if (data.redirect_url) {
+                    window.location.replace(data.redirect_url);
+                } else {
+                    this.trigger('auth-complete');
+                }
             },
 
             saveError: function( error ) {

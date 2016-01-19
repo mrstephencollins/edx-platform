@@ -43,8 +43,8 @@
                     type: model.ajaxType,
                     data: data,
                     headers: headers,
-                    success: function() {
-                        model.trigger('sync');
+                    success: function( data ) {
+                        model.trigger('sync', data);
                     },
                     error: function( error ) {
                         model.trigger('error', error);

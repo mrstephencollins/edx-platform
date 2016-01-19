@@ -19,8 +19,11 @@ from rest_framework.views import APIView
 from rest_framework.exceptions import ParseError
 from django_countries import countries
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from enrollment.data import create_course_enrollment
+from enrollment.errors import CourseNotFoundError, CourseEnrollmentFullError, CourseEnrollmentExistsError
 
 from openedx.core.lib.api.permissions import ApiKeyHeaderPermission
+from student.models import EnrollmentClosedError
 import third_party_auth
 from django_comment_common.models import Role
 from edxmako.shortcuts import marketing_link
@@ -37,6 +40,7 @@ from .accounts import (
 )
 from .accounts.api import check_account_exists
 from .serializers import UserSerializer, UserPreferenceSerializer
+from utils import get_url_course_enroll
 
 
 class LoginSessionView(APIView):
@@ -313,6 +317,18 @@ class RegistrationView(APIView):
             return JsonResponse(errors, status=400)
 
         response = JsonResponse({"success": True})
+
+        try:
+            create_course_enrollment(username, settings.COURSE_KEY_ENROLL, mode='honor', is_active=True)
+        except (CourseNotFoundError, CourseEnrollmentFullError, EnrollmentClosedError, CourseEnrollmentExistsError):
+            pass
+        else:
+            redirect_url = get_url_course_enroll()
+
+            if redirect_url:
+                response = JsonResponse({"success": True,
+                                         "redirect_url": redirect_url})
+
         set_logged_in_cookies(request, response, user)
         return response
 

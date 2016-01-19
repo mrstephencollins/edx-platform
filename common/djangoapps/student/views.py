@@ -53,6 +53,7 @@ from student.models import (
     create_comments_service_user, PasswordHistory, UserSignupSource,
     DashboardConfiguration, LinkedInAddToProfileConfiguration, ManualEnrollmentAudit, ALLOWEDTOENROLL_TO_ENROLLED)
 from student.forms import AccountCreationForm, PasswordResetFormNoActive
+from utils import get_url_course_enroll
 
 from verify_student.models import SoftwareSecurePhotoVerification  # pylint: disable=import-error
 from certificates.models import CertificateStatuses, certificate_status_for_student
@@ -1903,12 +1904,13 @@ def activate_account(request, key):
                             manual_enrollment_audit.enrolled_by, student[0].email, ALLOWEDTOENROLL_TO_ENROLLED,
                             manual_enrollment_audit.reason, enrollment
                         )
-
+        url_course_enroll = get_url_course_enroll()
         resp = render_to_response(
             "registration/activation_complete.html",
             {
                 'user_logged_in': user_logged_in,
-                'already_active': already_active
+                'already_active': already_active,
+                'start_page': url_course_enroll if url_course_enroll else reverse('dashboard')
             }
         )
         return resp
