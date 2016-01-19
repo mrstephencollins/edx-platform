@@ -274,6 +274,10 @@ class UserProfile(models.Model):
     bio = models.CharField(blank=True, null=True, max_length=3000, db_index=False)
     profile_image_uploaded_at = models.DateTimeField(null=True)
 
+    is_teacher = models.BooleanField(default=False)
+    teacher_email = models.EmailField(blank=True, null=True)
+    class_id = models.CharField(max_length=255, blank=True, null=True)
+
     @property
     def has_profile_image(self):
         """

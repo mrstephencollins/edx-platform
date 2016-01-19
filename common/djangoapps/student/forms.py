@@ -9,11 +9,12 @@ from django.contrib.auth.hashers import UNUSABLE_PASSWORD
 from django.contrib.auth.tokens import default_token_generator
 
 from django.utils.http import int_to_base36
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import ugettext, ugettext_lazy as _
 from django.template import loader
 
 from django.conf import settings
 from microsite_configuration import microsite
+from student.models import UserProfile
 from util.password_policy_validators import (
     validate_password_length,
     validate_password_complexity,
@@ -175,6 +176,8 @@ class AccountCreationForm(forms.Form):
                                 "required": _("To enroll, you must follow the honor code.")
                             }
                         )
+                elif field_name == "is_teacher":
+                    self.fields[field_name] = forms.BooleanField(required=False)
                 else:
                     required = field_value == "required"
                     min_length = 1 if field_name in ("gender", "level_of_education") else 2
@@ -234,3 +237,23 @@ class AccountCreationForm(forms.Form):
             for key, value in self.cleaned_data.items()
             if key in self.extended_profile_fields and value is not None
         }
+
+    def clean(self):
+        cleaned_data = super(AccountCreationForm, self).clean()
+
+        if not cleaned_data.get("is_teacher", False):
+            teacher_email = cleaned_data['teacher_email']
+            class_id = cleaned_data['class_id']
+
+            if not cleaned_data['teacher_email']:
+                self._errors["teacher_email"] = self.error_class([ugettext("Teacher email is required")])
+                del cleaned_data["teacher_email"]
+            elif not UserProfile.objects.filter(is_teacher=True, user__email=teacher_email).exists():
+                self._errors["teacher_email"] = self.error_class([ugettext("Is not a valid teacher email")])
+                del cleaned_data["teacher_email"]
+
+            if not class_id:
+                self._errors["class_id"] = self.error_class([ugettext("Class id is required")])
+                del cleaned_data["class_id"]
+
+        return cleaned_data

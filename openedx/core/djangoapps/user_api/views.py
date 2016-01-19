@@ -157,6 +157,9 @@ class RegistrationView(APIView):
     DEFAULT_FIELDS = ["email", "name", "username", "password"]
 
     EXTRA_FIELDS = [
+        "role",
+        "teacher_email",
+        "class_id",
         "city",
         "country",
         "gender",
@@ -187,6 +190,7 @@ class RegistrationView(APIView):
         # explicitly set to "optional" in Django settings.
         self._extra_fields_setting = copy.deepcopy(settings.REGISTRATION_EXTRA_FIELDS)
         self._extra_fields_setting["honor_code"] = self._extra_fields_setting.get("honor_code", "required")
+        self._extra_fields_setting["role"] = self._extra_fields_setting.get("role", "required")
 
         # Check that the setting is configured correctly
         for field_name in self.EXTRA_FIELDS:
@@ -293,6 +297,8 @@ class RegistrationView(APIView):
         # for TOS, privacy policy, etc.
         if data.get("honor_code") and "terms_of_service" not in data:
             data["terms_of_service"] = data["honor_code"]
+
+        data["is_teacher"] = True if data["role"] == "teacher" else False
 
         try:
             user = create_account_with_params(request, data)
@@ -695,6 +701,53 @@ class RegistrationView(APIView):
             error_messages={
                 "required": error_msg
             }
+        )
+
+    def _add_role_field(self, form_desc, required=True):
+        status_label = _(u"Role")
+
+        form_desc.add_field(
+            "role",
+            label=status_label,
+            field_type="select",
+            options=(
+                ('student', _('Student')),
+                ('teacher', _('Teacher')),
+            ),
+            default='student',
+            required=required
+        )
+
+    def _add_teacher_email_field(self, form_desc, required=False):
+        email_label = _(u"Teacher email")
+
+        # Translators: This example email address is used as a placeholder in
+        # a field on the registration form meant to hold the user's email address.
+        email_placeholder = _(u"teacher@domain.com")
+
+        form_desc.add_field(
+            "teacher_email",
+            field_type="email",
+            label=email_label,
+            placeholder=email_placeholder,
+            restrictions={
+                "min_length": EMAIL_MIN_LENGTH,
+                "max_length": EMAIL_MAX_LENGTH,
+            },
+            required=required
+        )
+
+    def _add_class_id_field(self, form_desc, required=True):
+        name_label = _(u"Class id")
+
+
+        form_desc.add_field(
+            "class_id",
+            label=name_label,
+            restrictions={
+                "max_length": NAME_MAX_LENGTH,
+            },
+            required=required
         )
 
     def _apply_third_party_auth_overrides(self, request, form_desc):
