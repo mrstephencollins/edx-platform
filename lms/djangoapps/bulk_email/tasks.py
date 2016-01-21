@@ -35,7 +35,7 @@ from celery.exceptions import RetryTaskError  # pylint: disable=no-name-in-modul
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
+from django.core.mail import EmailMultiAlternatives, get_connection
 from django.core.urlresolvers import reverse
 from django.utils.translation import ugettext as _
 from xmodule.modulestore.django import modulestore
@@ -830,7 +830,7 @@ def _statsd_tag(course_title):
     return u"course_email:{0}".format(course_title)
 
 # @periodic_task(run_every=crontab(minute=30, hour=1))
-@periodic_task(run_every=timedelta(minutes=5))
+@periodic_task(run_every=timedelta(minutes=3))
 def reports_for_teacher():
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
@@ -904,6 +904,10 @@ def reports_for_teacher():
             'email_from_address',
             settings.DEFAULT_FROM_EMAIL
         )
-        message = render_to_string('emails/report.html', context)
 
-        send_mail(_('Report'), message, from_address, [teacher.user.email])
+        message = render_to_string('emails/report.html', context)
+        message_txt = render_to_string('emails/report.txt', context)
+
+        mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email])
+        mail.attach_alternative(message, 'text/html')
+        mail.send(fail_silently=True)
