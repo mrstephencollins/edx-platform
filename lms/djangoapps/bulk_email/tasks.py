@@ -829,8 +829,8 @@ def _statsd_tag(course_title):
     """
     return u"course_email:{0}".format(course_title)
 
-# @periodic_task(run_every=crontab(minute=30, hour=1))
-@periodic_task(run_every=timedelta(minutes=3))
+
+@periodic_task(run_every=crontab(minute=0, hour=1))
 def reports_for_teacher():
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
