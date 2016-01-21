@@ -3,6 +3,10 @@
 This module contains celery task functions for handling the sending of bulk email
 to a course.
 """
+from celery.schedules import crontab
+from celery.task import periodic_task
+from datetime import timedelta, datetime
+from opaque_keys.edx.keys import CourseKey
 import re
 import random
 import json
@@ -31,15 +35,22 @@ from celery.exceptions import RetryTaskError  # pylint: disable=no-name-in-modul
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives, get_connection, send_mail
 from django.core.urlresolvers import reverse
+from django.utils.translation import ugettext as _
+from xmodule.modulestore.django import modulestore
 
 from bulk_email.models import (
     CourseEmail, Optout,
     SEND_TO_MYSELF, SEND_TO_ALL, TO_OPTIONS,
     SEND_TO_STAFF,
 )
+from courseware import grades
 from courseware.courses import get_course, course_image_url
+from courseware.models import StudentModule
+from edxmako.shortcuts import render_to_string
+from microsite_configuration import microsite
+from student.models import CourseEnrollment
 from student.roles import CourseStaffRole, CourseInstructorRole
 from instructor_task.models import InstructorTask
 from instructor_task.subtasks import (
@@ -817,3 +828,82 @@ def _statsd_tag(course_title):
     The tag also gets modified by our dogstats_wrapper code.
     """
     return u"course_email:{0}".format(course_title)
+
+# @periodic_task(run_every=crontab(minute=30, hour=1))
+@periodic_task(run_every=timedelta(minutes=5))
+def reports_for_teacher():
+    course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
+    course = modulestore().get_course(course_key)
+
+    try:
+        chapter_report = course.get_children()[0]
+        section_report = chapter_report.get_children()[0]
+    except IndexError:
+        return
+
+    reset_library_content = None
+    vertical_report = None
+
+    try:
+        vertical_report = section_report.get_children()[0]
+        reset_library_content = [children for children in vertical_report.get_children()
+                                 if children.location.block_type == 'reset_library_content'][0]
+    except IndexError:
+        pass
+    else:
+        reset_library_content = reset_library_content if reset_library_content.location.block_type == 'reset_library_content' else None
+
+    library_content = []
+    if vertical_report:
+        library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
+
+
+    teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
+
+    context = {
+        'assignment_type': section_report.format,
+        'library_keys': [modulestore().get_library(lib.source_library_key).display_name for lib in library_content]
+    }
+
+    for teacher in teachers:
+        context.update({
+            'students': [],
+            'teacher_email': teacher.user.email,
+            'report_id': '{}_{}'.format(teacher.user.username, datetime.now().strftime("%Y-%m-%d")),
+            'time_stamp': datetime.now().strftime("%Y.%m.%d-%H:%M:%S"),
+        })
+        students = CourseEnrollment.objects.filter(course_id=course_key,
+                                                   user__profile__is_teacher=False,
+                                                   user__profile__teacher_email=teacher.user.email).distinct()
+        for student in students:
+            request = grades._get_mock_request(student.user)
+            grade = grades.grade(student.user, request, course)
+            progress_chapters = grades.get_weighted_scores(student.user, course).chapters
+            progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
+            section_scores = [section['scores'] for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+
+            tries = 0
+            if reset_library_content:
+                student_module = StudentModule.objects.filter(course_id=course_key,
+                                                              module_state_key=reset_library_content.scope_ids.usage_id,
+                                                              student=student.user)
+                if student_module:
+                    tries = json.loads(student_module[0].state).get('amount_reset', 0)
+
+            data_student = {
+                'full_name': student.user.profile.name,
+                'class_id': student.user.profile.class_id,
+                'grage': grade['percent'],
+                'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in section_scores],
+                'tries': tries
+            }
+            context['students'].append(data_student)
+        context['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
+
+        from_address = microsite.get_value(
+            'email_from_address',
+            settings.DEFAULT_FROM_EMAIL
+        )
+        message = render_to_string('emails/report.html', context)
+
+        send_mail(_('Report'), message, from_address, [teacher.user.email])
