@@ -3,6 +3,8 @@
 This module contains celery task functions for handling the sending of bulk email
 to a course.
 """
+import StringIO
+import csv
 from celery.schedules import crontab
 from celery.task import periodic_task
 from datetime import timedelta, datetime
@@ -900,6 +902,8 @@ def reports_for_teacher():
             context['students'].append(data_student)
         context['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
 
+        csv_file = generate_file_csv(context)
+
         from_address = microsite.get_value(
             'email_from_address',
             settings.DEFAULT_FROM_EMAIL
@@ -910,4 +914,22 @@ def reports_for_teacher():
 
         mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email])
         mail.attach_alternative(message, 'text/html')
+        mail.attach(u'report_{}.csv'.format(context['report_id']), csv_file.getvalue(), 'text/csv')
         mail.send(fail_silently=True)
+
+
+def generate_file_csv(context):
+    csv_file = StringIO.StringIO()
+    csv_writer = csv.writer(csv_file)
+    field_names = [_('Student'), _('Class ID'), _('Grade'), _('# tries')]
+
+    for index, library_key in enumerate(context['library_keys'], 1):
+        field_names.append(index)
+    csv_writer.writerow(field_names)
+
+    for student in context['students']:
+        row = [student['full_name'], student['class_id'], student['grage'], student['tries']]
+        for score in student['weighted_scores']:
+            row.append(score)
+        csv_writer.writerow(row)
+    return csv_file

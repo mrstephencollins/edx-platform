@@ -13,11 +13,8 @@ ${_("Library Key")}
 %endfor
 
 ${_("Assessment Report")}
-
+    ${_("Student")} ${_("Class ID")} ${_("Grade")} ${_("# tries")} ${_("scores")}
 %for index, student in enumerate(students, 1):
 
-    ${student['full_name']} ${student['class_id']} ${'{:0>2}%'.format(int(float(student['grage'])*100))} ${student['tries']}
-    %for score in student['weighted_scores']:
-    ${score}
-    %endfor
+    ${student['full_name']} ${student['class_id']} ${'{:0>2}%'.format(int(float(student['grage'])*100))} ${student['tries']} ${student['weighted_scores']}
 %endfor
