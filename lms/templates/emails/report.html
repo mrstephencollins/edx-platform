@@ -10,54 +10,57 @@
 
     <ul style="list-style:none; font-size: 16px; font-family: Arial, sans-serif">
         <li>${_("Teacher email:")} <span style="color:#ff0000;">${teacher_email}</span></li>
-        <li>${_("Assignment Type:")} <span style="color:#ff0000;">${assignment_type}</span></li>
         <li>${_("Time Stamp:")} <span style="color:#ff0000;">${time_stamp}</span></li>
         <li>${_("Report ID:")} <span style="color:#ff0000;">${report_id}</span></li>
     </ul>
-​
-    <ul style="list-style:none; font-size: 16px; font-family: Arial, sans-serif">
-        <li><span style="font-size: 20px;">${_("Library Key")}</span></li>
 
-        %for index, library_key in enumerate(library_keys, 1):
-            <li>${index} <span style="color:#ff0000; font-size: 15px; ">${library_key}</span></li>
-        %endfor
+    %for report in vertical_reports:
+    ​
+        <ul style="list-style:none; font-size: 16px; font-family: Arial, sans-serif">
+            <li>${_("Assignment Type:")} <span style="color:#ff0000;">${report['assignment_type']}</span></li>
+            <li><span style="font-size: 20px;">${_("Library Key")}</span></li>
 
-    </ul>
-
-    <table border="1px" width="90%" height="200px" cellspacing="0" cellpadding="6" style="font-size: 16px; font-family: Arial, sans-serif; border: 1px solid #fff; border-collapse: collapse;">
-        <tr>
-            <td colspan="4">${_("Assessment Report")}</td>
-            <td colspan="${len(library_keys)}" bgcolor="#DEEBF7" align="center">${_("Library")}</td>
-        </tr>
-        <tr>
-            <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Student")}</th>
-            <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Class ID")}</th>
-            <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Grade")}</th>
-            <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("# tries")}</th>
-
-            %for index, library_key in enumerate(library_keys, 1):
-                <th bgcolor="#5B9BD5" style="color:#ffffff;">${index}</th>
+            %for index, library_key in enumerate(report['library_keys'], 1):
+                <li>${index} <a href="${report['url_section']}" target="_blank"><span style="color:#ff0000; font-size: 15px; ">${library_key}</span></a></li>
             %endfor
-        </tr>
 
-        %for index, student in enumerate(students, 1):
-            %if index%2 == 0:
-                <tr bgcolor="#EAEFF7" style="color:#ff0000;">
-            %else:
-                <tr bgcolor="#D2DEEF" style="color:#ff0000;">
-            %endif
+        </ul>
 
-                <td>${student['full_name']}</td>
-                <td align="center">${student['class_id']}</td>
-                <td align="center">${'{:0>2}%'.format(int(float(student['grage'])*100))}</td>
-                <td align="center">${student['tries']}</td>
+        <table border="1px" width="90%" height="200px" cellspacing="0" cellpadding="6" style="font-size: 16px; font-family: Arial, sans-serif; border: 1px solid #fff; border-collapse: collapse;">
+            <tr>
+                <td colspan="4">${_("Assessment Report")}</td>
+                <td colspan="${len(report['library_keys'])}" bgcolor="#DEEBF7" align="center">${_("Library")}</td>
+            </tr>
+            <tr>
+                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Student")}</th>
+                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Class ID")}</th>
+                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Grade")}</th>
+                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("# tries")}</th>
 
-                %for score in student['weighted_scores']:
-                    <td align="center">${score}</td>
+                %for index, library_key in enumerate(report['library_keys'], 1):
+                    <th bgcolor="#5B9BD5" style="color:#ffffff;">${index}</th>
                 %endfor
             </tr>
-        %endfor
 
-    </table>
+            %for index, student in enumerate(report['students'], 1):
+                %if index%2 == 0:
+                    <tr bgcolor="#EAEFF7" style="color:#ff0000;">
+                %else:
+                    <tr bgcolor="#D2DEEF" style="color:#ff0000;">
+                %endif
+
+                    <td>${student['full_name']}</td>
+                    <td align="center">${student['class_id']}</td>
+                    <td align="center">${'{:0>2}%'.format(int(float(student['grage'])*100))}</td>
+                    <td align="center">${student['tries']}</td>
+
+                    %for score in student['weighted_scores']:
+                        <td align="center">${score}</td>
+                    %endfor
+                </tr>
+            %endfor
+
+        </table>
+    %endfor
 </body>
 </html>

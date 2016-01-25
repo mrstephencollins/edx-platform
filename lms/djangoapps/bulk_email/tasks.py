@@ -832,77 +832,89 @@ def _statsd_tag(course_title):
     return u"course_email:{0}".format(course_title)
 
 
-@periodic_task(run_every=crontab(minute=0, hour=1))
+@periodic_task(run_every=crontab(minute=0, hour=4))
 def reports_for_teacher():
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
 
-    try:
-        chapter_report = course.get_children()[0]
-        section_report = chapter_report.get_children()[0]
-    except IndexError:
+    if course is None:
         return
 
-    reset_library_content = None
-    vertical_report = None
-
-    try:
-        vertical_report = section_report.get_children()[0]
-        reset_library_content = [children for children in vertical_report.get_children()
-                                 if children.location.block_type == 'reset_library_content'][0]
-    except IndexError:
-        pass
-    else:
-        reset_library_content = reset_library_content if reset_library_content.location.block_type == 'reset_library_content' else None
-
-    library_content = []
-    if vertical_report:
-        library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
-
-
+    stripped_site_name = microsite.get_value(
+        'SITE_NAME',
+        settings.SITE_NAME
+    )
     teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
-
-    context = {
-        'assignment_type': section_report.format,
-        'library_keys': [modulestore().get_library(lib.source_library_key).display_name for lib in library_content]
-    }
-
     for teacher in teachers:
-        context.update({
-            'students': [],
+        context = {
             'teacher_email': teacher.user.email,
             'report_id': '{}_{}'.format(teacher.user.username, datetime.now().strftime("%Y-%m-%d")),
             'time_stamp': datetime.now().strftime("%Y.%m.%d-%H:%M:%S"),
-        })
-        students = CourseEnrollment.objects.filter(course_id=course_key,
-                                                   user__profile__is_teacher=False,
-                                                   user__profile__teacher_email=teacher.user.email).distinct()
-        for student in students:
-            request = grades._get_mock_request(student.user)
-            grade = grades.grade(student.user, request, course)
-            progress_chapters = grades.get_weighted_scores(student.user, course).chapters
-            progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
-            section_scores = [section['scores'] for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+            'vertical_reports': []
+        }
 
-            tries = 0
-            if reset_library_content:
-                student_module = StudentModule.objects.filter(course_id=course_key,
-                                                              module_state_key=reset_library_content.scope_ids.usage_id,
-                                                              student=student.user)
-                if student_module:
-                    tries = json.loads(student_module[0].state).get('amount_reset', 0)
+        for chapter_report in course.get_children():
+            for section_report in chapter_report.get_children():
 
-            data_student = {
-                'full_name': student.user.profile.name,
-                'class_id': student.user.profile.class_id,
-                'grage': grade['percent'],
-                'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in section_scores],
-                'tries': tries
-            }
-            context['students'].append(data_student)
-        context['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
+                if section_report.format is None:
+                    continue
 
-        csv_file = generate_file_csv(context)
+                reset_library_content = None
+                vertical_report = None
+
+                try:
+                    vertical_report = section_report.get_children()[0]
+                    reset_library_content = [children for children in vertical_report.get_children()
+                                             if children.location.block_type == 'reset_library_content'][0]
+                except IndexError:
+                    pass
+
+                library_content = []
+                if vertical_report:
+                    library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
+
+                data_vertical_report = {
+                    'students': [],
+                    'assignment_type': section_report.format,
+                    'library_keys': [modulestore().get_library(lib.source_library_key).display_name for lib in library_content],
+                    'url_section': u'http://{site}{path}'.format(
+                        site=stripped_site_name,
+                        path=reverse('courseware_section', kwargs={'course_id': settings.COURSE_KEY_ENROLL,
+                                                                   'chapter': chapter_report.url_name,
+                                                                   'section': section_report.url_name})
+                    )
+                }
+
+                students = CourseEnrollment.objects.filter(course_id=course_key,
+                                                           user__profile__is_teacher=False,
+                                                           user__profile__teacher_email=teacher.user.email).distinct()
+                for student in students:
+                    request = grades._get_mock_request(student.user)
+                    grade = grades.grade(student.user, request, course)
+                    progress_chapters = grades.get_weighted_scores(student.user, course).chapters
+                    progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
+                    section_scores = [section['scores'] for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+
+                    tries = 0
+                    if reset_library_content:
+                        student_module = StudentModule.objects.filter(course_id=course_key,
+                                                                      module_state_key=reset_library_content.scope_ids.usage_id,
+                                                                      student=student.user)
+                        if student_module:
+                            tries = json.loads(student_module[0].state).get('amount_reset', 0)
+
+                    data_student = {
+                        'full_name': student.user.profile.name,
+                        'class_id': student.user.profile.class_id,
+                        'grage': grade['percent'],
+                        'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in section_scores],
+                        'tries': int(tries) + 1
+                    }
+                    data_vertical_report['students'].append(data_student)
+
+                data_vertical_report['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
+
+                context['vertical_reports'].append(data_vertical_report)
 
         from_address = microsite.get_value(
             'email_from_address',
@@ -914,21 +926,27 @@ def reports_for_teacher():
 
         mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email])
         mail.attach_alternative(message, 'text/html')
-        mail.attach(u'report_{}.csv'.format(context['report_id']), csv_file.getvalue(), 'text/csv')
+
+        for index, report in enumerate(context['vertical_reports'], 1):
+            csv_file = generate_file_csv(report)
+            mail.attach(u'report_{}_{}_{}.csv'.format(index, report['assignment_type'].replace(' ', '_'), context['report_id']),
+                        csv_file.getvalue(),
+                        'text/csv')
+
         mail.send(fail_silently=True)
 
 
-def generate_file_csv(context):
+def generate_file_csv(report):
     csv_file = StringIO.StringIO()
     csv_writer = csv.writer(csv_file)
-    field_names = [_('Student'), _('Class ID'), _('Grade'), _('# tries')]
+    field_names = [_('Student'), _('Assignment Type'), _('Class ID'), _('Grade'), _('# tries')]
 
-    for index, library_key in enumerate(context['library_keys'], 1):
+    for index, library_key in enumerate(report['library_keys'], 1):
         field_names.append(index)
     csv_writer.writerow(field_names)
 
-    for student in context['students']:
-        row = [student['full_name'], student['class_id'], student['grage'], student['tries']]
+    for student in report['students']:
+        row = [student['full_name'], report['assignment_type'], student['class_id'], student['grage'], student['tries']]
         for score in student['weighted_scores']:
             row.append(score)
         csv_writer.writerow(row)

@@ -2,19 +2,22 @@
 <%! from django.utils.translation import ugettext as _ %>
 
 ${_("Teacher email:")} ${teacher_email}
-${_("Assignment Type:")} ${assignment_type}
 ${_("Time Stamp:")} ${time_stamp}
 ${_("Report ID:")} ${report_id}
 
-${_("Library Key")}
+%for report in vertical_reports:
 
-%for index, library_key in enumerate(library_keys, 1):
-    ${index} ${library_key}
-%endfor
+    ${_("Assignment Type:")} ${report['assignment_type']}
+    ${_("Library Key")}
+    %for index, library_key in enumerate(report['library_keys'], 1):
+        ${index} ${library_key}
+    %endfor
 
-${_("Assessment Report")}
-    ${_("Student")} ${_("Class ID")} ${_("Grade")} ${_("# tries")} ${_("scores")}
-%for index, student in enumerate(students, 1):
+    ${_("Assessment Report")}
+        ${_("Student")} ${_("Class ID")} ${_("Grade")} ${_("# tries")} ${_("scores")}
+    %for index, student in enumerate(report['students'], 1):
 
-    ${student['full_name']} ${student['class_id']} ${'{:0>2}%'.format(int(float(student['grage'])*100))} ${student['tries']} ${student['weighted_scores']}
+        ${student['full_name']} ${student['class_id']} ${'{:0>2}%'.format(int(float(student['grage'])*100))} ${student['tries']} ${student['weighted_scores']}
+    %endfor
+
 %endfor
