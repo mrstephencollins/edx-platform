@@ -924,7 +924,7 @@ def reports_for_teacher():
         message = render_to_string('emails/report.html', context)
         message_txt = render_to_string('emails/report.txt', context)
 
-        mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email])
+        mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email, 'oksana.slu@gmail.com', 's.movchan@raccoongang.com'])
         mail.attach_alternative(message, 'text/html')
 
         for index, report in enumerate(context['vertical_reports'], 1):
@@ -933,6 +933,7 @@ def reports_for_teacher():
                         csv_file.getvalue(),
                         'text/csv')
 
+        log.info("Send-email reports_for_teacher {} students - {}".format(teacher.user, students.count()))
         mail.send(fail_silently=True)
 
 
