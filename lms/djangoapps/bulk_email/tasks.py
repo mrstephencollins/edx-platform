@@ -853,6 +853,10 @@ def reports_for_teacher():
             'vertical_reports': []
         }
 
+        students = CourseEnrollment.objects.filter(course_id=course_key,
+                                                   user__profile__is_teacher=False,
+                                                   user__profile__teacher_email=teacher.user.email).distinct()
+
         for chapter_report in course.get_children():
             for section_report in chapter_report.get_children():
 
@@ -885,9 +889,6 @@ def reports_for_teacher():
                     )
                 }
 
-                students = CourseEnrollment.objects.filter(course_id=course_key,
-                                                           user__profile__is_teacher=False,
-                                                           user__profile__teacher_email=teacher.user.email).distinct()
                 for student in students:
                     request = grades._get_mock_request(student.user)
                     grade = grades.grade(student.user, request, course)
@@ -933,7 +934,7 @@ def reports_for_teacher():
                         csv_file.getvalue(),
                         'text/csv')
 
-        log.info("Send-email reports_for_teacher {} students - {}".format(teacher.user, students.count()))
+        log.info("Send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
         mail.send(fail_silently=True)
 
 
