@@ -2573,6 +2573,9 @@ ACCOUNT_VISIBILITY_CONFIGURATION = {
         "level_of_education",
         "mailing_address",
         "requires_parental_consent",
+        "role",
+        "teacher_email",
+        "class_id"
     ]
 }
 

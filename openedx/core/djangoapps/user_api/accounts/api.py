@@ -124,6 +124,9 @@ def update_account_settings(requesting_user, update, username=None):
     if requesting_user.username != username:
         raise UserNotAuthorized()
 
+    if "role" in update:
+        update["is_teacher"] = True if update["role"] == 'teacher' else False
+
     # If user has requested to change email, we must call the multi-step process to handle this.
     # It is not handled by the serializer (which considers email to be read-only).
     changing_email = False

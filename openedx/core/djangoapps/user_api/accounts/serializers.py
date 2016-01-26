@@ -91,6 +91,9 @@ class UserReadOnlySerializer(serializers.Serializer):
             "level_of_education": AccountLegacyProfileSerializer.convert_empty_to_None(profile.level_of_education),
             "mailing_address": profile.mailing_address,
             "requires_parental_consent": profile.requires_parental_consent(),
+            "role": 'teacher' if user.profile.is_teacher else 'student',
+            "teacher_email": user.profile.teacher_email,
+            "class_id": user.profile.class_id,
         }
 
         return self._filter_fields(
@@ -162,7 +165,8 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         model = UserProfile
         fields = (
             "name", "gender", "goals", "year_of_birth", "level_of_education", "country",
-            "mailing_address", "bio", "profile_image", "requires_parental_consent", "language_proficiencies"
+            "mailing_address", "bio", "profile_image", "requires_parental_consent", "language_proficiencies",
+            "is_teacher", "teacher_email", "class_id"
         )
         # Currently no read-only field, but keep this so view code doesn't need to know.
         read_only_fields = ()
@@ -183,6 +187,13 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         if len(language_proficiencies) != len(unique_language_proficiencies):
             raise serializers.ValidationError("The language_proficiencies field must consist of unique languages")
         return value
+
+    def validate_teacher_email(self, new_teacher_email):
+        if not (self.instance.is_teacher or UserProfile.objects.filter(is_teacher=True, user__email=new_teacher_email).exists()):
+            raise serializers.ValidationError(
+                "Is not a valid teacher email."
+            )
+        return new_teacher_email
 
     def transform_gender(self, user_profile, value):
         """ Converts empty string to None, to indicate not set. Replaced by to_representation in version 3. """

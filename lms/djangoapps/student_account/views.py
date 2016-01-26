@@ -384,6 +384,9 @@ def account_settings_context(request):
                 'options': year_of_birth_options,
             }, 'preferred_language': {
                 'options': settings.ALL_LANGUAGES,
+            },
+            'role': {
+                'options': [('student', _('Student')), ('teacher', _('Teacher'))]
             }
         },
         'platform_name': settings.PLATFORM_NAME,

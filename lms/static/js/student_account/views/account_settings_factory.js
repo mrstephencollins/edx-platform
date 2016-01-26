@@ -98,6 +98,32 @@
                         {
                             view: new FieldViews.DropdownFieldView({
                                 model: userAccountModel,
+                                title: gettext('Role'),
+                                valueAttribute: 'role',
+                                options: fieldsData.role.options,
+                                persistChanges: true,
+                                required: true
+                            })
+                        },
+                        {
+                            view: new FieldViews.TextFieldView({
+                                model: userAccountModel,
+                                title: gettext('Teacher email'),
+                                valueAttribute: 'teacher_email',
+                                persistChanges: true
+                            })
+                        },
+                        {
+                            view: new FieldViews.TextFieldView({
+                                model: userAccountModel,
+                                title: gettext('Class id'),
+                                valueAttribute: 'class_id',
+                                persistChanges: true
+                            })
+                        },
+                        {
+                            view: new FieldViews.DropdownFieldView({
+                                model: userAccountModel,
                                 title: gettext('Education Completed'),
                                 valueAttribute: 'level_of_education',
                                 options: fieldsData.level_of_education.options,
