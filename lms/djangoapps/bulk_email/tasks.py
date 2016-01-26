@@ -46,7 +46,7 @@ from bulk_email.models import (
     CourseEmail, Optout,
     SEND_TO_MYSELF, SEND_TO_ALL, TO_OPTIONS,
     SEND_TO_STAFF,
-)
+    CourseEmailTemplate)
 from courseware import grades
 from courseware.courses import get_course, course_image_url
 from courseware.models import StudentModule
@@ -834,8 +834,13 @@ def _statsd_tag(course_title):
 
 @periodic_task(run_every=crontab(minute=0, hour=4))
 def reports_for_teacher():
+    log.info("Start reports_for_teacher")
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
+    try:
+        template = CourseEmailTemplate.get_template('reports_for_teacher')
+    except CourseEmailTemplate.DoesNotExist:
+        template = None
 
     if course is None:
         return
@@ -846,6 +851,7 @@ def reports_for_teacher():
     )
     teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
     for teacher in teachers:
+        log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
         context = {
             'teacher_email': teacher.user.email,
             'report_id': '{}_{}'.format(teacher.user.username, datetime.now().strftime("%Y-%m-%d")),
@@ -922,11 +928,19 @@ def reports_for_teacher():
             settings.DEFAULT_FROM_EMAIL
         )
 
-        message = render_to_string('emails/report.html', context)
-        message_txt = render_to_string('emails/report.txt', context)
+        html_msg = render_to_string('emails/report.html', context)
+        plaintext_msg = render_to_string('emails/report.txt', context)
 
-        mail = EmailMultiAlternatives(_('Report'), message_txt, from_address, [teacher.user.email], bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'])
-        mail.attach_alternative(message, 'text/html')
+        if template:
+            html_msg = template.render_htmltext(html_msg, {})
+            plaintext_msg = template.render_plaintext(plaintext_msg, {})
+
+        mail = EmailMultiAlternatives(_('Report'),
+                                      plaintext_msg,
+                                      from_address,
+                                      [teacher.user.email],
+                                      bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'])
+        mail.attach_alternative(html_msg, 'text/html')
 
         for index, report in enumerate(context['vertical_reports'], 1):
             csv_file = generate_file_csv(report)
@@ -934,8 +948,9 @@ def reports_for_teacher():
                         csv_file.getvalue(),
                         'text/csv')
 
-        log.info("Send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
+        log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
         mail.send(fail_silently=True)
+        log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
 
 
 def generate_file_csv(report):
