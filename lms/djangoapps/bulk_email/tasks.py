@@ -862,6 +862,7 @@ def reports_for_teacher():
         students = CourseEnrollment.objects.filter(course_id=course_key,
                                                    user__profile__is_teacher=False,
                                                    user__profile__teacher_email=teacher.user.email).distinct()
+        users = User.objects.filter(courseenrollment__id__in=list(students.values_list('id', flat=True)))
 
         for chapter_report in course.get_children():
             for section_report in chapter_report.get_children():
@@ -895,10 +896,8 @@ def reports_for_teacher():
                     )
                 }
 
-                for student in students:
-                    request = grades._get_mock_request(student.user)
-                    grade = grades.grade(student.user, request, course)
-                    progress_chapters = grades.get_weighted_scores(student.user, course).chapters
+                for student, grade, message in grades.iterate_grades_for(course, users):
+                    progress_chapters = grades.get_weighted_scores(student, course).chapters
                     progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
                     section_scores = [section['scores'] for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
 
@@ -906,13 +905,13 @@ def reports_for_teacher():
                     if reset_library_content:
                         student_module = StudentModule.objects.filter(course_id=course_key,
                                                                       module_state_key=reset_library_content.scope_ids.usage_id,
-                                                                      student=student.user)
+                                                                      student=student)
                         if student_module:
                             tries = json.loads(student_module[0].state).get('amount_reset', 0)
 
                     data_student = {
-                        'full_name': student.user.profile.name,
-                        'class_id': student.user.profile.class_id,
+                        'full_name': student.profile.name,
+                        'class_id': student.profile.class_id,
                         'grage': grade['percent'],
                         'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in section_scores],
                         'tries': int(tries) + 1
@@ -948,9 +947,9 @@ def reports_for_teacher():
                         csv_file.getvalue(),
                         'text/csv')
 
-        log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
+        log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
         mail.send(fail_silently=True)
-        log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  students.count()))
+        log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
 
 
 def generate_file_csv(report):
