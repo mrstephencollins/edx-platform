@@ -837,19 +837,28 @@ def reports_for_teacher():
     log.info("Start reports_for_teacher")
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
+
+    if course is None:
+        return
+
     try:
         template = CourseEmailTemplate.get_template('reports_for_teacher')
     except CourseEmailTemplate.DoesNotExist:
         template = None
 
-    if course is None:
-        return
-
+    connection = get_connection()
+    connection.open()
     stripped_site_name = microsite.get_value(
         'SITE_NAME',
         settings.SITE_NAME
     )
+    from_address = microsite.get_value(
+        'email_from_address',
+        settings.DEFAULT_FROM_EMAIL
+    )
     teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
+    log.info("Teachers ----- {}".format(teachers))
+
     for teacher in teachers:
         log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
         context = {
@@ -922,11 +931,6 @@ def reports_for_teacher():
 
                 context['vertical_reports'].append(data_vertical_report)
 
-        from_address = microsite.get_value(
-            'email_from_address',
-            settings.DEFAULT_FROM_EMAIL
-        )
-
         html_msg = render_to_string('emails/report.html', context)
         plaintext_msg = render_to_string('emails/report.txt', context)
 
@@ -938,7 +942,8 @@ def reports_for_teacher():
                                       plaintext_msg,
                                       from_address,
                                       [teacher.user.email],
-                                      bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'])
+                                      bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
+                                      connection=connection)
         mail.attach_alternative(html_msg, 'text/html')
 
         for index, report in enumerate(context['vertical_reports'], 1):
@@ -948,8 +953,11 @@ def reports_for_teacher():
                         'text/csv')
 
         log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-        mail.send(fail_silently=True)
+        connection.send_messages([mail])
         log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+
+    connection.close()
+    return
 
 
 def generate_file_csv(report):
