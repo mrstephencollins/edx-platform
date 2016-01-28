@@ -949,7 +949,7 @@ def reports_for_teacher():
 
                 context['vertical_reports'].append(data_vertical_report)
 
-        if is_modified_report(students, library_content_total):
+        if is_modified_report(users, library_content_total):
             html_msg = render_to_string('emails/report.html', context)
             plaintext_msg = render_to_string('emails/report.txt', context)
 
