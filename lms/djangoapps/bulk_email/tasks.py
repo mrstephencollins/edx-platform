@@ -859,6 +859,20 @@ def reports_for_teacher():
     teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
     log.info("Teachers ----- {}".format(teachers))
 
+    def is_modified_report(students, library_content):
+        xbloks = []
+        for library in library_content:
+            xbloks += library.get_children()
+        module_state_keys = [x.scope_ids.usage_id for x in xbloks]
+        student_module = StudentModule.objects.filter(course_id=course_key,
+                                                      module_state_key__in=module_state_keys,
+                                                      student__in=list(students),
+                                                      modified__gte=datetime.now()-timedelta(days=1))
+        if student_module.exists():
+            return True
+        return False
+
+
     for teacher in teachers:
         log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
         context = {
@@ -872,6 +886,8 @@ def reports_for_teacher():
                                                    user__profile__is_teacher=False,
                                                    user__profile__teacher_email=teacher.user.email).distinct()
         users = User.objects.filter(courseenrollment__id__in=list(students.values_list('id', flat=True)))
+
+        library_content_total = []
 
         for chapter_report in course.get_children():
             for section_report in chapter_report.get_children():
@@ -892,6 +908,8 @@ def reports_for_teacher():
                 library_content = []
                 if vertical_report:
                     library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
+
+                library_content_total += library_content
 
                 data_vertical_report = {
                     'students': [],
@@ -931,30 +949,33 @@ def reports_for_teacher():
 
                 context['vertical_reports'].append(data_vertical_report)
 
-        html_msg = render_to_string('emails/report.html', context)
-        plaintext_msg = render_to_string('emails/report.txt', context)
+        if is_modified_report(students, library_content_total):
+            html_msg = render_to_string('emails/report.html', context)
+            plaintext_msg = render_to_string('emails/report.txt', context)
 
-        if template:
-            html_msg = template.render_htmltext(html_msg, {})
-            plaintext_msg = template.render_plaintext(plaintext_msg, {})
+            if template:
+                html_msg = template.render_htmltext(html_msg, {})
+                plaintext_msg = template.render_plaintext(plaintext_msg, {})
 
-        mail = EmailMultiAlternatives(_('Report'),
-                                      plaintext_msg,
-                                      from_address,
-                                      [teacher.user.email],
-                                      bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
-                                      connection=connection)
-        mail.attach_alternative(html_msg, 'text/html')
+            mail = EmailMultiAlternatives(_('Report'),
+                                          plaintext_msg,
+                                          from_address,
+                                          [teacher.user.email],
+                                          bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
+                                          connection=connection)
+            mail.attach_alternative(html_msg, 'text/html')
 
-        for index, report in enumerate(context['vertical_reports'], 1):
-            csv_file = generate_file_csv(report)
-            mail.attach(u'report_{}_{}_{}.csv'.format(index, report['assignment_type'].replace(' ', '_'), context['report_id']),
-                        csv_file.getvalue(),
-                        'text/csv')
+            for index, report in enumerate(context['vertical_reports'], 1):
+                csv_file = generate_file_csv(report)
+                mail.attach(u'report_{}_{}_{}.csv'.format(index, report['assignment_type'].replace(' ', '_'), context['report_id']),
+                            csv_file.getvalue(),
+                            'text/csv')
 
-        log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-        connection.send_messages([mail])
-        log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            connection.send_messages([mail])
+            log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+        else:
+            log.info("reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
 
     connection.close()
     return
