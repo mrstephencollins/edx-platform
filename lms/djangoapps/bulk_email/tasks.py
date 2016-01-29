@@ -867,7 +867,7 @@ def reports_for_teacher():
         student_module = StudentModule.objects.filter(course_id=course_key,
                                                       module_state_key__in=module_state_keys,
                                                       student__in=list(students),
-                                                      modified__gte=datetime.now()-timedelta(days=1))
+                                                      modified__gte=datetime.utcnow()-timedelta(days=1))
         if student_module.exists():
             return True
         return False
@@ -923,10 +923,11 @@ def reports_for_teacher():
                     )
                 }
 
-                for student, grade, message in grades.iterate_grades_for(course, users):
+                for student in users:
                     progress_chapters = grades.get_weighted_scores(student, course).chapters
                     progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
-                    section_scores = [section['scores'] for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+                    progress_section = [section for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+                    section_total = progress_section['section_total']
 
                     tries = 0
                     if reset_library_content:
@@ -939,9 +940,9 @@ def reports_for_teacher():
                     data_student = {
                         'full_name': student.profile.name,
                         'class_id': student.profile.class_id,
-                        'grage': grade['percent'],
-                        'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in section_scores],
-                        'tries': int(tries) + 1
+                        'grage': int(round(section_total.earned * 100.0 / section_total.possible)) if section_total.possible else 0,
+                        'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in progress_section['scores']],
+                        'tries': tries
                     }
                     data_vertical_report['students'].append(data_student)
 

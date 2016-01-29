@@ -17,7 +17,7 @@ ${_("Report ID:")} ${report_id}
         ${_("Student")} ${_("Class ID")} ${_("Grade")} ${_("# tries")} ${_("scores")}
     %for index, student in enumerate(report['students'], 1):
 
-        ${student['full_name']} ${student['class_id']} ${'{:0>2}%'.format(int(float(student['grage'])*100))} ${student['tries']} ${student['weighted_scores']}
+        ${student['full_name']} ${student['class_id']} ${'{}%'.format(student['grage'])} ${student['tries']} ${student['weighted_scores']}
     %endfor
 
 %endfor

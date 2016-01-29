@@ -43,7 +43,7 @@
 
                     <td>${student['full_name']}</td>
                     <td align="center">${student['class_id']}</td>
-                    <td align="center">${'{:0>2}%'.format(int(float(student['grage'])*100))}</td>
+                    <td align="center">${'{}%'.format(student['grage'])}</td>
                     <td align="center">${student['tries']}</td>
 
                     %for score in student['weighted_scores']:
