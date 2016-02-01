@@ -889,9 +889,11 @@ def reports_for_teacher():
         library_content_total = []
 
         for chapter_report in course.get_children():
+            if chapter_report.visible_to_staff_only:
+                continue
             for section_report in chapter_report.get_children():
 
-                if section_report.format is None:
+                if section_report.format is None or section_report.visible_to_staff_only:
                     continue
 
                 reset_library_content = None
@@ -903,6 +905,9 @@ def reports_for_teacher():
                                              if children.location.block_type == 'reset_library_content'][0]
                 except IndexError:
                     pass
+
+                if vertical_report is None or vertical_report.visible_to_staff_only:
+                    continue
 
                 library_content = []
                 if vertical_report:
@@ -957,6 +962,7 @@ def reports_for_teacher():
                 html_msg = template.render_htmltext(html_msg, {})
                 plaintext_msg = template.render_plaintext(plaintext_msg, {})
 
+            log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
             connection = get_connection()
             connection.open()
             mail = EmailMultiAlternatives(_('Report'),
@@ -973,18 +979,18 @@ def reports_for_teacher():
                             csv_file.getvalue(),
                             'text/csv')
 
-            log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-
             try:
                 connection.send_messages([mail])
-                connection.close()
             except Exception as exc:
                 log.error("The email was not sent. Exception: {}").format(exc)
-
-            log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            else:
+                log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            finally:
+                connection.close()
+                log.info("Connection close.")
         else:
             log.info("Reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-
+        sleep(5)
     return
 
 
