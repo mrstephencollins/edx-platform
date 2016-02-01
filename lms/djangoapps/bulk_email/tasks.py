@@ -859,139 +859,154 @@ def reports_for_teacher():
     teachers = CourseEnrollment.objects.filter(course_id=course_key, user__profile__is_teacher=True)
     log.info("Teachers ----- {}".format(teachers))
 
-    def is_modified_report(students, library_content):
-        xbloks = []
-        for library in library_content:
-            xbloks += library.get_children()
-        module_state_keys = [x.scope_ids.usage_id for x in xbloks]
-        student_module = StudentModule.objects.filter(course_id=course_key,
-                                                      module_state_key__in=module_state_keys,
-                                                      student__in=list(students),
-                                                      modified__gte=datetime.utcnow()-timedelta(days=1))
-        if student_module.exists():
-            return True
-        return False
-
     for teacher in teachers:
-        log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
-        context = {
-            'teacher_email': teacher.user.email,
-            'report_id': '{}_{}'.format(teacher.user.username, datetime.now().strftime("%Y-%m-%d")),
-            'time_stamp': datetime.now().strftime("%Y.%m.%d-%H:%M:%S"),
-            'vertical_reports': []
-        }
+        connection = generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection)
 
-        students = CourseEnrollment.objects.filter(course_id=course_key,
-                                                   user__profile__is_teacher=False,
-                                                   user__profile__teacher_email=teacher.user.email).distinct()
-        users = User.objects.filter(courseenrollment__id__in=list(students.values_list('id', flat=True)))
+    connection.close()
+    log.info("Connection close.")
+    return
 
-        library_content_total = []
 
-        for chapter_report in course.get_children():
-            if chapter_report.visible_to_staff_only:
+def generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection):
+    log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
+    context = {
+        'teacher_email': teacher.user.email,
+        'report_id': '{}_{}'.format(teacher.user.username, datetime.now().strftime("%Y-%m-%d")),
+        'time_stamp': datetime.now().strftime("%Y.%m.%d-%H:%M:%S"),
+        'vertical_reports': []
+    }
+
+    students = CourseEnrollment.objects.filter(course_id=course_key,
+                                               user__profile__is_teacher=False,
+                                               user__profile__teacher_email=teacher.user.email).distinct()
+    users = User.objects.filter(courseenrollment__id__in=list(students.values_list('id', flat=True)))
+
+    library_content_total = []
+
+    for chapter_report in course.get_children():
+        if chapter_report.visible_to_staff_only:
+            continue
+        for section_report in chapter_report.get_children():
+
+            if section_report.format is None or section_report.visible_to_staff_only:
                 continue
-            for section_report in chapter_report.get_children():
 
-                if section_report.format is None or section_report.visible_to_staff_only:
-                    continue
-
-                reset_library_content = None
-                vertical_report = None
-
-                try:
-                    vertical_report = section_report.get_children()[0]
-                    reset_library_content = [children for children in vertical_report.get_children()
-                                             if children.location.block_type == 'reset_library_content'][0]
-                except IndexError:
-                    pass
-
-                if vertical_report is None or vertical_report.visible_to_staff_only:
-                    continue
-
-                library_content = []
-                if vertical_report:
-                    library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
-
-                library_content_total += library_content
-
-                data_vertical_report = {
-                    'students': [],
-                    'assignment_type': section_report.format,
-                    'library_keys': [modulestore().get_library(lib.source_library_key).display_name for lib in library_content],
-                    'url_section': u'http://{site}{path}'.format(
-                        site=stripped_site_name,
-                        path=reverse('courseware_section', kwargs={'course_id': settings.COURSE_KEY_ENROLL,
-                                                                   'chapter': chapter_report.url_name,
-                                                                   'section': section_report.url_name})
-                    )
-                }
-
-                for student in users:
-                    progress_chapters = grades.get_weighted_scores(student, course).chapters
-                    progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
-                    progress_section = [section for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
-                    section_total = progress_section['section_total']
-
-                    tries = 1
-                    if reset_library_content:
-                        student_module = StudentModule.objects.filter(course_id=course_key,
-                                                                      module_state_key=reset_library_content.scope_ids.usage_id,
-                                                                      student=student)
-                        if student_module:
-                            tries = json.loads(student_module[0].state).get('amount_reset', 1)
-
-                    data_student = {
-                        'full_name': student.profile.name,
-                        'class_id': student.profile.class_id,
-                        'grage': int(round(section_total.earned * 100.0 / section_total.possible)) if section_total.possible else 0,
-                        'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in progress_section['scores']],
-                        'tries': tries
-                    }
-                    data_vertical_report['students'].append(data_student)
-
-                data_vertical_report['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
-
-                context['vertical_reports'].append(data_vertical_report)
-
-        if is_modified_report(users, library_content_total):
-            html_msg = render_to_string('emails/report.html', context)
-            plaintext_msg = render_to_string('emails/report.txt', context)
-
-            if template:
-                html_msg = template.render_htmltext(html_msg, {})
-                plaintext_msg = template.render_plaintext(plaintext_msg, {})
-
-            log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-            connection = get_connection()
-            connection.open()
-            mail = EmailMultiAlternatives(_('Report'),
-                                          plaintext_msg,
-                                          from_address,
-                                          [teacher.user.email],
-                                          bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
-                                          connection=connection)
-            mail.attach_alternative(html_msg, 'text/html')
-
-            for index, report in enumerate(context['vertical_reports'], 1):
-                csv_file = generate_file_csv(report)
-                mail.attach(u'report_{}_{}_{}.csv'.format(index, report['assignment_type'].replace(' ', '_'), context['report_id']),
-                            csv_file.getvalue(),
-                            'text/csv')
+            reset_library_content = None
+            vertical_report = None
 
             try:
-                connection.send_messages([mail])
-            except Exception as exc:
-                log.error("The email was not sent. Exception: {}").format(exc)
-            else:
-                log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-            finally:
-                connection.close()
-                log.info("Connection close.")
+                vertical_report = section_report.get_children()[0]
+                reset_library_content = [children for children in vertical_report.get_children()
+                                         if children.location.block_type == 'reset_library_content'][0]
+            except IndexError:
+                pass
+
+            if vertical_report is None or vertical_report.visible_to_staff_only:
+                continue
+
+            library_content = []
+            if vertical_report:
+                library_content = [children for children in vertical_report.get_children() if children.location.block_type == 'library_content']
+
+            library_content_total += library_content
+
+            data_vertical_report = {
+                'students': [],
+                'assignment_type': section_report.format,
+                'library_keys': [modulestore().get_library(lib.source_library_key).display_name for lib in library_content],
+                'url_section': u'http://{site}{path}'.format(
+                    site=stripped_site_name,
+                    path=reverse('courseware_section', kwargs={'course_id': settings.COURSE_KEY_ENROLL,
+                                                               'chapter': chapter_report.url_name,
+                                                               'section': section_report.url_name})
+                )
+            }
+
+            for student in users:
+                progress_chapters = grades.get_weighted_scores(student, course).chapters
+                progress_chapter = [chapter for chapter in progress_chapters if chapter['url_name'] == chapter_report.url_name][0]
+                progress_section = [section for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
+                section_total = progress_section['section_total']
+
+                tries = 1
+                if reset_library_content:
+                    student_module = StudentModule.objects.filter(course_id=course_key,
+                                                                  module_state_key=reset_library_content.scope_ids.usage_id,
+                                                                  student=student)
+                    if student_module:
+                        tries = json.loads(student_module[0].state).get('amount_reset', 1)
+
+                data_student = {
+                    'full_name': student.profile.name,
+                    'class_id': student.profile.class_id,
+                    'grage': int(round(section_total.earned * 100.0 / section_total.possible)) if section_total.possible else 0,
+                    'weighted_scores': ['{}/{}'.format(s.earned, s.possible) for s in progress_section['scores']],
+                    'tries': tries
+                }
+                data_vertical_report['students'].append(data_student)
+
+            data_vertical_report['students'].sort(key=lambda s: (s['class_id'], s['full_name']))
+
+            context['vertical_reports'].append(data_vertical_report)
+
+    if is_modified_report(users, library_content_total, course_key):
+        log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+
+        try:
+            send_report(template, context, from_address, teacher, connection)
+        except SMTPServerDisconnected as exc:
+            log.error("The email was not sent. SMTPServerDisconnected: {}".format(exc))
+            log.info("New generate report teacher_username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            connection = get_connection()
+            connection.open()
+            generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection)
+        except Exception as exc:
+            log.error("The email was not sent. Exception: {}".format(exc))
         else:
-            log.info("Reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-        sleep(5)
-    return
+            log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+
+    else:
+        log.info("Reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+    return connection
+
+
+def is_modified_report(students, library_content, course_key):
+    xbloks = []
+    for library in library_content:
+        xbloks += library.get_children()
+    module_state_keys = [x.scope_ids.usage_id for x in xbloks]
+    student_module = StudentModule.objects.filter(course_id=course_key,
+                                                  module_state_key__in=module_state_keys,
+                                                  student__in=list(students),
+                                                  modified__gte=datetime.utcnow()-timedelta(days=1))
+    if student_module.exists():
+        return True
+    return False
+
+
+def send_report(template, context, from_address, teacher, connection):
+    html_msg = render_to_string('emails/report.html', context)
+    plaintext_msg = render_to_string('emails/report.txt', context)
+
+    if template:
+        html_msg = template.render_htmltext(html_msg, {})
+        plaintext_msg = template.render_plaintext(plaintext_msg, {})
+
+    mail = EmailMultiAlternatives(_('Report'),
+                                  plaintext_msg,
+                                  from_address,
+                                  [teacher.user.email],
+                                  bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
+                                  connection=connection)
+    mail.attach_alternative(html_msg, 'text/html')
+
+    for index, report in enumerate(context['vertical_reports'], 1):
+        csv_file = generate_file_csv(report)
+        mail.attach(u'report_{}_{}_{}.csv'.format(index, report['assignment_type'].replace(' ', '_'), context['report_id']),
+                    csv_file.getvalue(),
+                    'text/csv')
+
+    connection.send_messages([mail])
 
 
 def generate_file_csv(report):
