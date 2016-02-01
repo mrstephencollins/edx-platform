@@ -872,7 +872,6 @@ def reports_for_teacher():
             return True
         return False
 
-
     for teacher in teachers:
         log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
         context = {
@@ -929,13 +928,13 @@ def reports_for_teacher():
                     progress_section = [section for section in progress_chapter['sections'] if section['url_name'] == section_report.url_name][0]
                     section_total = progress_section['section_total']
 
-                    tries = 0
+                    tries = 1
                     if reset_library_content:
                         student_module = StudentModule.objects.filter(course_id=course_key,
                                                                       module_state_key=reset_library_content.scope_ids.usage_id,
                                                                       student=student)
                         if student_module:
-                            tries = json.loads(student_module[0].state).get('amount_reset', 0)
+                            tries = json.loads(student_module[0].state).get('amount_reset', 1)
 
                     data_student = {
                         'full_name': student.profile.name,
@@ -958,6 +957,8 @@ def reports_for_teacher():
                 html_msg = template.render_htmltext(html_msg, {})
                 plaintext_msg = template.render_plaintext(plaintext_msg, {})
 
+            connection = get_connection()
+            connection.open()
             mail = EmailMultiAlternatives(_('Report'),
                                           plaintext_msg,
                                           from_address,
@@ -973,12 +974,17 @@ def reports_for_teacher():
                             'text/csv')
 
             log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
-            connection.send_messages([mail])
+
+            try:
+                connection.send_messages([mail])
+                connection.close()
+            except Exception as exc:
+                log.error("The email was not sent. Exception: {}").format(exc)
+
             log.info("Post send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
         else:
-            log.info("reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
+            log.info("Reports_for_teacher is not modified username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
 
-    connection.close()
     return
 
 
