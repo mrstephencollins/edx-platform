@@ -835,6 +835,8 @@ def _statsd_tag(course_title):
 @periodic_task(run_every=crontab(minute=0, hour=4))
 def reports_for_teacher():
     log.info("Start reports_for_teacher")
+    date_from_which_selected_changes = datetime.utcnow() - timedelta(days=1)
+    log.info("Date from which the selected changes (utc) {}".format(date_from_which_selected_changes))
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
 
@@ -860,14 +862,14 @@ def reports_for_teacher():
     log.info("Teachers ----- {}".format(teachers))
 
     for teacher in teachers:
-        connection = generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection)
+        connection = generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection, date_from_which_selected_changes)
 
     connection.close()
     log.info("Connection close.")
     return
 
 
-def generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection):
+def generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection, date_from_which_selected_changes):
     log.info("Teacher username - {}, email - {}".format(teacher.user.username, teacher.user.email))
     context = {
         'teacher_email': teacher.user.email,
@@ -882,6 +884,7 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
     users = User.objects.filter(courseenrollment__id__in=list(students.values_list('id', flat=True)))
 
     library_content_total = []
+    reset_library_content_total = []
 
     for chapter_report in course.get_children():
         if chapter_report.visible_to_staff_only:
@@ -930,6 +933,7 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
 
                 tries = 1
                 if reset_library_content:
+                    reset_library_content_total.append(reset_library_content)
                     student_module = StudentModule.objects.filter(course_id=course_key,
                                                                   module_state_key=reset_library_content.scope_ids.usage_id,
                                                                   student=student)
@@ -949,7 +953,7 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
 
             context['vertical_reports'].append(data_vertical_report)
 
-    if is_modified_report(users, library_content_total, course_key):
+    if is_modified_report(users, library_content_total, reset_library_content_total, course_key, date_from_which_selected_changes):
         log.info("Pre send-email reports_for_teacher username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
 
         try:
@@ -959,7 +963,7 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
             log.info("New generate report teacher_username - {}, email - {}  students - {}".format(teacher.user, teacher.user.email,  users.count()))
             connection = get_connection()
             connection.open()
-            generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection)
+            generate_report(teacher, course_key, course, template, stripped_site_name, from_address, connection, date_from_which_selected_changes)
         except Exception as exc:
             log.error("The email was not sent. Exception: {}".format(exc))
         else:
@@ -970,17 +974,27 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
     return connection
 
 
-def is_modified_report(students, library_content, course_key):
+def is_modified_report(students, library_content, reset_library_content_total, course_key, date_from_which_selected_changes):
+    module_state_keys = [xblok.scope_ids.usage_id for xblok in reset_library_content_total]
+    student_modules = StudentModule.objects.filter(course_id=course_key,
+                                                  module_state_key__in=module_state_keys,
+                                                  student__in=list(students),
+                                                  modified__gte=date_from_which_selected_changes).distinct()
+    if student_modules.exists():
+        return True
+
     xbloks = []
     for library in library_content:
         xbloks += library.get_children()
     module_state_keys = [x.scope_ids.usage_id for x in xbloks]
-    student_module = StudentModule.objects.filter(course_id=course_key,
+    student_modules = StudentModule.objects.filter(course_id=course_key,
                                                   module_state_key__in=module_state_keys,
                                                   student__in=list(students),
-                                                  modified__gte=datetime.utcnow()-timedelta(days=1))
-    if student_module.exists():
-        return True
+                                                  modified__gte=date_from_which_selected_changes).distinct()
+    for student_module in student_modules:
+        last_submission_time = json.loads(student_module.state).get('last_submission_time')
+        if last_submission_time and datetime.strptime(last_submission_time, '%Y-%m-%dT%H:%M:%SZ') > date_from_which_selected_changes:
+            return True
     return False
 
 
