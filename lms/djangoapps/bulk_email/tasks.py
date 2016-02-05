@@ -1010,7 +1010,7 @@ def send_report(template, context, from_address, teacher, connection):
                                   plaintext_msg,
                                   from_address,
                                   [teacher.user.email],
-                                  bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com'],
+                                  bcc=['oksana.slu@gmail.com', 's.movchan@raccoongang.com', from_address],
                                   connection=connection)
     mail.attach_alternative(html_msg, 'text/html')
 
