@@ -1,53 +1,57 @@
 <%! from django.utils.translation import ugettext as _ %>
 
-    <ul style="list-style:none; font-size: 16px; font-family: Arial, sans-serif">
-        <li>${_("Teacher email:")} <span style="color:#ff0000;">${teacher_email}</span></li>
-        <li>${_("Time Stamp:")} <span style="color:#ff0000;">${time_stamp}</span></li>
-        <li>${_("Report ID:")} <span style="color:#ff0000;">${report_id}</span></li>
+    <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; padding-left: 0; margin-bottom:40px; margin-top:40px; line-height: 1.5em">
+        <li>${_("Teacher email:")} <span style="color:#15c">${teacher_email}</span></li>
+        <li>${_("Time Stamp:")} <span style="color:#949494;">${time_stamp}</span></li>
+        <li>${_("Report ID:")} <span style="color:#949494;">${report_id}</span></li>
     </ul>
 
     %for report in vertical_reports:
     ​
-        <ul style="list-style:none; font-size: 16px; font-family: Arial, sans-serif">
-            <li>${_("Assignment Type:")} <span style="color:#ff0000;">${report['assignment_type']}</span></li>
-            <li><span style="font-size: 20px;">${_("Library Key")}</span></li>
+        <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; margin-bottom:40px; padding-left: 0; line-height: 1.5em">
+            <li>
+                ${_("Assignment Type:")} <span style="color:#949494;">${report['assignment_type']}</span>
+            </li>
+            <li>
+                <span style="font-size: 20px; color:#1F2B96; font-family: Arial, sans-serif; font-weight:bold;">${_("Library Key")}</span>
+            </li>
 
             %for index, library_key in enumerate(report['library_keys'], 1):
-                <li>${index} <a href="${report['url_section']}" target="_blank"><span style="color:#ff0000; font-size: 15px; ">${library_key}</span></a></li>
+                <li>${index} <a href="${report['url_section']}" target="_blank" style="color:#15c; font-size: 15px;">${library_key}</a></li>
             %endfor
 
         </ul>
 
-        <table border="1px" width="90%" height="200px" cellspacing="0" cellpadding="6" style="font-size: 16px; font-family: Arial, sans-serif; border: 1px solid #fff; border-collapse: collapse;">
+        <table border="1px" width="100%" height="200px" cellspacing="0" cellpadding="6" style="font-size: 15px; font-family: Arial, sans-serif; border: 1px solid #fff; border-collapse: collapse; margin-bottom: 50px">
             <tr>
                 <td colspan="4">${_("Assessment Report")}</td>
                 <td colspan="${len(report['library_keys'])}" bgcolor="#DEEBF7" align="center">${_("Library")}</td>
             </tr>
             <tr>
-                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Student")}</th>
-                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Class ID")}</th>
-                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("Grade")}</th>
-                <th bgcolor="#5B9BD5" style="color:#ffffff;">${_("# tries")}</th>
+                <th bgcolor="#95AAD8" style="color:#ffffff;">${_("Student")}</th>
+                <th bgcolor="#95AAD8" style="color:#ffffff;">${_("Class ID")}</th>
+                <th bgcolor="#95AAD8" style="color:#ffffff;">${_("Grade")}</th>
+                <th bgcolor="#95AAD8" style="color:#ffffff;">${_("# tries")}</th>
 
                 %for index, library_key in enumerate(report['library_keys'], 1):
-                    <th bgcolor="#5B9BD5" style="color:#ffffff;">${index}</th>
+                    <th bgcolor="#95AAD8" style="color:#ffffff;">${index}</th>
                 %endfor
             </tr>
 
             %for index, student in enumerate(report['students'], 1):
                 %if index%2 == 0:
-                    <tr bgcolor="#EAEFF7" style="color:#ff0000;">
+                    <tr bgcolor="#D2DEEF" style="color:#3E3E3E;">
                 %else:
-                    <tr bgcolor="#D2DEEF" style="color:#ff0000;">
+                    <tr bgcolor="#EAEFF7" style="color:#3E3E3E;">
                 %endif
 
                     <td>${student['full_name']}</td>
-                    <td align="center">${student['class_id']}</td>
-                    <td align="center">${'{}%'.format(student['grage'])}</td>
-                    <td align="center">${student['tries']}</td>
+                    <td>${student['class_id']}</td>
+                    <td align="right">${'{}%'.format(student['grage'])}</td>
+                    <td align="right">${student['tries']}</td>
 
                     %for score in student['weighted_scores']:
-                        <td align="center">${score}</td>
+                        <td align="right">${score}</td>
                     %endfor
                 </tr>
             %endfor
