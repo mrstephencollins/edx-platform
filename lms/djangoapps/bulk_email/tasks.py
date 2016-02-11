@@ -8,6 +8,7 @@ import csv
 from celery.schedules import crontab
 from celery.task import periodic_task
 from datetime import timedelta, datetime
+from pytz import timezone
 from opaque_keys.edx.keys import CourseKey
 import re
 import random
@@ -835,7 +836,7 @@ def _statsd_tag(course_title):
 @periodic_task(run_every=crontab(minute=0, hour=4))
 def reports_for_teacher():
     log.info("Start reports_for_teacher")
-    date_from_which_selected_changes = datetime.utcnow() - timedelta(days=1)
+    date_from_which_selected_changes = datetime.utcnow().replace(tzinfo=timezone('UTC')) - timedelta(days=1)
     log.info("Date from which the selected changes (utc) {}".format(date_from_which_selected_changes))
     course_key = CourseKey.from_string(settings.COURSE_KEY_ENROLL)
     course = modulestore().get_course(course_key)
@@ -977,9 +978,9 @@ def generate_report(teacher, course_key, course, template, stripped_site_name, f
 def is_modified_report(students, library_content, reset_library_content_total, course_key, date_from_which_selected_changes):
     module_state_keys = [xblok.scope_ids.usage_id for xblok in reset_library_content_total]
     student_modules = StudentModule.objects.filter(course_id=course_key,
-                                                  module_state_key__in=module_state_keys,
-                                                  student__in=list(students),
-                                                  modified__gte=date_from_which_selected_changes).distinct()
+                                                   module_state_key__in=module_state_keys,
+                                                   student__in=list(students),
+                                                   modified__gte=date_from_which_selected_changes).distinct()
     if student_modules.exists():
         return True
 
@@ -988,12 +989,12 @@ def is_modified_report(students, library_content, reset_library_content_total, c
         xbloks += library.get_children()
     module_state_keys = [x.scope_ids.usage_id for x in xbloks]
     student_modules = StudentModule.objects.filter(course_id=course_key,
-                                                  module_state_key__in=module_state_keys,
-                                                  student__in=list(students),
-                                                  modified__gte=date_from_which_selected_changes).distinct()
+                                                   module_state_key__in=module_state_keys,
+                                                   student__in=list(students),
+                                                   modified__gte=date_from_which_selected_changes).distinct()
     for student_module in student_modules:
         last_submission_time = json.loads(student_module.state).get('last_submission_time')
-        if last_submission_time and datetime.strptime(last_submission_time, '%Y-%m-%dT%H:%M:%SZ') > date_from_which_selected_changes:
+        if last_submission_time and datetime.strptime(last_submission_time, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone('UTC')) > date_from_which_selected_changes:
             return True
     return False
 
