@@ -1,6 +1,6 @@
 <%! from django.utils.translation import ugettext as _ %>
 
-    <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; padding-left: 0; margin-bottom:40px; margin-top:40px; line-height: 1.5em">
+    <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; padding-left: 0; margin-bottom:0; margin-top:40px; line-height: 1.5em">
         <li>${_("Teacher email:")} <span style="color:#15c">${teacher_email}</span></li>
         <li>${_("Time Stamp:")} <span style="color:#949494;">${time_stamp}</span></li>
         <li>${_("Report ID:")} <span style="color:#949494;">${report_id}</span></li>
@@ -8,7 +8,7 @@
 
     %for report in vertical_reports:
     ​
-        <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; margin-bottom:40px; padding-left: 0; line-height: 1.5em">
+        <ul style="list-style:none; font-size: 15px; font-family: Arial, sans-serif; margin-bottom:40px; margin-top:0; padding-left: 0; line-height: 1.5em">
             <li>
                 ${_("Assignment Type:")} <span style="color:#949494;">${report['assignment_type']}</span>
             </li>
